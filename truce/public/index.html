@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Truce — taste overlap for divided tables</title>
+    <meta
+      name="description"
+      content="Build two taste tables across media, movies, music, food, and holidays. Qloo finds the shared bridge — with memory prompts, dinner games, and an optional Truce Deck."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Syne:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <header class="top">
+      <button type="button" class="brand" id="brand-home" aria-label="Back to start">Truce</button>
+      <p class="byline">by taste · powered by Qloo</p>
+    </header>
+
+    <main class="stage">
+      <section class="hero" id="hero">
+        <h1>Stop arguing. Put shared culture on the table.</h1>
+        <p class="lede">
+          Fill two taste tables — media, movies, music, food, holidays. The bridge
+          is computed from each side’s media diet (food &amp; destinations help);
+          movies and artists on the card are context. Qloo returns shared culture
+          plus memory prompts and a low-stakes dinner game.
+        </p>
+
+        <div class="diets" id="diets" role="group" aria-label="Taste tables"></div>
+
+        <div class="cta-row">
+          <button type="button" class="cta" id="find-bridge">Find the bridge</button>
+          <button type="button" class="ghost" id="reset-demo">Reset demo fill</button>
+          <p class="hint" id="status">Demo tastes loaded · live Insights when you run</p>
+        </div>
+      </section>
+
+      <section class="result" id="result" hidden>
+        <p class="result-kicker">Bridge card</p>
+        <h2 class="result-title" id="result-title">Shared taste</h2>
+        <p class="result-sub" id="result-sub"></p>
+
+        <div class="agenda" id="agenda" hidden>
+          <p class="agenda-kicker">Tonight’s truce agenda</p>
+          <ol class="agenda-list" id="agenda-list"></ol>
+          <p class="agenda-note">
+            Put phones away. Do these three in order. Politics stays off the table
+            until someone laughs.
+          </p>
+        </div>
+
+        <div class="signal-row" id="signal-row"></div>
+
+        <div class="venn" id="venn" hidden>
+          <p class="venn-kicker">Where the lists sit</p>
+          <div class="venn-cols">
+            <div class="venn-col venn-left">
+              <h3 id="venn-left-title">Left only</h3>
+              <ul id="venn-left"></ul>
+            </div>
+            <div class="venn-col venn-shared">
+              <h3>Shared bridge</h3>
+              <ul id="venn-shared"></ul>
+            </div>
+            <div class="venn-col venn-right">
+              <h3 id="venn-right-title">Right only</h3>
+              <ul id="venn-right"></ul>
+            </div>
+          </div>
+          <p class="venn-note" id="venn-note"></p>
+        </div>
+
+        <div class="result-actions">
+          <button type="button" class="cta" id="open-deck">Open Truce Deck</button>
+          <button type="button" class="ghost" id="copy-prompts">Copy all prompts</button>
+          <button type="button" class="again" id="again">Edit tables</button>
+        </div>
+        <p class="copy-status" id="copy-status" hidden></p>
+
+        <ol class="bridges" id="bridges"></ol>
+
+        <details class="more">
+          <summary>How each side ranked alone</summary>
+          <div class="samples" id="samples"></div>
+        </details>
+
+        <p class="provenance" id="provenance"></p>
+      </section>
+    </main>
+
+    <div class="deck" id="deck" hidden>
+      <div class="deck-top">
+        <p class="deck-kicker">Truce Deck · <span id="deck-progress">1 / 1</span></p>
+        <button type="button" class="ghost deck-close" id="close-deck">Back to list</button>
+      </div>
+      <article class="deck-card" id="deck-card">
+        <p class="deck-type" id="deck-type"></p>
+        <h2 id="deck-name"></h2>
+        <p class="deck-why" id="deck-why"></p>
+        <p class="prompt" id="deck-prompt"></p>
+        <p class="game" id="deck-game"></p>
+        <div class="bars deck-bars" id="deck-bars"></div>
+      </article>
+      <div class="deck-votes" id="deck-votes">
+        <div class="vote-col">
+          <p>Left</p>
+          <button type="button" class="vote love" data-side="left" data-vote="love">Love this</button>
+          <button type="button" class="vote pass" data-side="left" data-vote="pass">Hard pass</button>
+        </div>
+        <div class="vote-col">
+          <p>Right</p>
+          <button type="button" class="vote love" data-side="right" data-vote="love">Love this</button>
+          <button type="button" class="vote pass" data-side="right" data-vote="pass">Hard pass</button>
+        </div>
+      </div>
+      <p class="deck-lock" id="deck-lock" hidden></p>
+      <div class="deck-nav">
+        <button type="button" class="ghost" id="deck-prev">Previous</button>
+        <button type="button" class="cta" id="deck-next">Next</button>
+      </div>
+    </div>
+
+    <footer class="foot">
+      <p>
+        Not voter data. Not a prediction about one person. Group taste from Qloo
+        Insights using your section signals as
+        <code>signal.interests.entities</code>.
+      </p>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

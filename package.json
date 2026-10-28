@@ -1,0 +1,19 @@
+{
+  "name": "truce-by-taste",
+  "version": "1.0.0",
+  "description": "Truce — Qloo-powered cultural bridge card for divided media diets",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "truce": "node truce/server.mjs",
+    "start": "node truce/server.mjs"
+  },
+  "keywords": ["qloo", "hackathon", "truce", "taste"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@qloo/qloo-harness": "^0.1.26",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0"
+  }
+}

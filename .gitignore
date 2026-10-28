@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+*.pem
+.qloo/
+node_modules/
+probe-output/
+.DS_Store
+qloo-hackathon-kit/
+*.log
+.railway/
