@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Truce">
+  <rect width="64" height="64" rx="14" fill="#12161c"/>
+  <!-- Geometric T matching Truce weight -->
+  <path fill="#f3efe6" d="M14 16h36v9H39.5v27h-15V25H14V16z"/>
+</svg>
