@@ -366,8 +366,11 @@ async function findBridge() {
       const sample =
         data.buckets?.artists?.left_sample?.slice(0, 3)?.join(", ") ||
         "no artist samples";
+      const rateHint = data.meta?.rate_limited
+        ? " Qloo rate-limited this server IP — wait ~60s and try once more."
+        : "";
       setStatus(
-        `No shared bridges this run (${data.meta?.strategy || "unknown strategy"}). Artist sample: ${sample}. Try Reset demo.`,
+        `No shared bridges (${data.meta?.strategy || "unknown"}). ${sample}.${rateHint}`,
         "error"
       );
       return;

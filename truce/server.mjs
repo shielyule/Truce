@@ -75,11 +75,12 @@ const OUTPUT_TYPES = [
 ];
 
 const searchCache = new Map();
+const insightsCache = new Map();
 const MAX_SIGNALS_PER_SIDE = 10;
 const QLOO_TIMEOUT_MS = 20000;
 const QLOO_CONCURRENCY = 1;
-const QLOO_GAP_MS = 350;
-const QLOO_MAX_RETRIES = 5;
+const QLOO_GAP_MS = 450;
+const QLOO_MAX_RETRIES = 6;
 
 /** Sections safe to use as Insights signals. Opposing artists/movies as signals
  *  pull graphs apart and erase bridges — keep those on the card as profile only. */
@@ -287,13 +288,26 @@ async function resolveName(name, searchType) {
 async function resolveSide(side) {
   const label = String(side?.label || "Table").slice(0, 80);
   const sectionsIn = side?.sections || {};
+  const profile = [];
+  const unresolved = [];
   const jobs = [];
 
+  // Only hit /search for signal sections (media/food/destinations).
+  // Movies/artists/music stay as display profile — searching them burned rate limit on Railway.
   for (const spec of SECTIONS) {
     const items = Array.isArray(sectionsIn[spec.key]) ? sectionsIn[spec.key] : [];
     for (const raw of items.slice(0, 6)) {
       const name = String(raw || "").trim();
       if (!name) continue;
+      if (!SIGNAL_SECTIONS.has(spec.key)) {
+        profile.push({
+          name,
+          id: null,
+          section: spec.key,
+          via: "display",
+        });
+        continue;
+      }
       jobs.push(
         resolveName(name, spec.searchType)
           .then((hit) =>
@@ -307,32 +321,31 @@ async function resolveSide(side) {
   }
 
   const settled = await Promise.all(jobs);
-  const resolved = [];
-  const unresolved = [];
+  const signalResolved = [];
   for (const row of settled) {
-    if (row.ok) resolved.push(row.row);
-    else unresolved.push({ name: row.name, section: row.section });
+    if (row.ok) {
+      signalResolved.push(row.row);
+      profile.push(row.row);
+    } else unresolved.push({ name: row.name, section: row.section });
   }
 
   const rank = { media: 0, food: 1, destinations: 2, movies: 3, artists: 4, music: 5 };
-  resolved.sort((a, b) => (rank[a.section] ?? 9) - (rank[b.section] ?? 9));
+  signalResolved.sort((a, b) => (rank[a.section] ?? 9) - (rank[b.section] ?? 9));
 
-  // Profile = everything we resolved (for UI). Signals = media-first subset for Insights.
-  const profile = resolved.slice(0, MAX_SIGNALS_PER_SIDE);
-  let signals = profile.filter((r) => SIGNAL_SECTIONS.has(r.section));
+  let signals = signalResolved.filter((r) => SIGNAL_SECTIONS.has(r.section));
   if (!signals.length) {
-    // No media/food/destinations — fall back to whatever we have
-    signals = profile.slice(0, 6);
+    signals = signalResolved.slice(0, 6);
   } else {
-    // Prefer pure media when present (proven bridge path from probes)
     const mediaOnly = signals.filter((r) => r.section === "media");
-    if (mediaOnly.length >= 2) signals = mediaOnly;
+    if (mediaOnly.length >= 1) signals = mediaOnly.slice(0, 6);
     else signals = signals.slice(0, 6);
   }
 
+  profile.sort((a, b) => (rank[a.section] ?? 9) - (rank[b.section] ?? 9));
+
   return {
     label,
-    resolved: profile,
+    resolved: profile.slice(0, MAX_SIGNALS_PER_SIDE + 8),
     signals,
     unresolved,
   };
@@ -340,6 +353,11 @@ async function resolveSide(side) {
 
 async function insightsForIds(ids, type, take, popularityMin = "0.15") {
   if (!ids.length) return [];
+  const cacheKey = `${ids.slice().sort().join(",")}|${type}|${take}|${popularityMin}`;
+  if (insightsCache.has(cacheKey)) {
+    console.log(`[cache] insights hit ${type}`);
+    return insightsCache.get(cacheKey);
+  }
   const params = {
     "filter.type": type,
     "signal.interests.entities": ids.join(","),
@@ -348,19 +366,24 @@ async function insightsForIds(ids, type, take, popularityMin = "0.15") {
   };
   try {
     const payload = await qlooGet("/v2/insights", params);
-    return entitiesFrom(payload).map((e) => normalize(e, type));
+    const rows = entitiesFrom(payload).map((e) => normalize(e, type));
+    if (rows.length) insightsCache.set(cacheKey, rows);
+    return rows;
   } catch (err) {
-    console.warn(`insights skip ${type}:`, err.message);
-    return [];
+    console.warn(`insights skip ${type}:`, err.status || "", err.message);
+    if (err.status === 429) err.rateLimited = true;
+    return Object.assign([], { rateLimited: err.status === 429, error: err.message });
   }
 }
 
 async function buildBuckets(leftIds, rightIds) {
   const buckets = {};
+  let rateLimited = false;
   // Sequential per type (left then right) so we stay under rate limits
   for (const spec of OUTPUT_TYPES) {
     const a = await insightsForIds(leftIds, spec.type, spec.take);
     const b = await insightsForIds(rightIds, spec.type, spec.take);
+    if (a.rateLimited || b.rateLimited) rateLimited = true;
     buckets[spec.key] = {
       label: spec.label,
       type: spec.type,
@@ -374,6 +397,7 @@ async function buildBuckets(leftIds, rightIds) {
       `[bridge] ${spec.key}: L=${a.length} R=${b.length} shared=${buckets[spec.key].bridges.length}`
     );
   }
+  buckets._rateLimited = rateLimited;
   return buckets;
 }
 
@@ -512,24 +536,37 @@ app.post("/api/bridge", async (req, res) => {
       `[bridge] insights signals L=${leftIds.length} (${left.signals.map((s) => s.name).join(", ")}) R=${rightIds.length} (${right.signals.map((s) => s.name).join(", ")})`
     );
 
-    // Brief pause after resolve burst so Insights aren't immediately 429'd
-    await sleep(600);
+    // Brief pause after resolve so Insights aren't immediately 429'd
+    await sleep(400);
 
     let buckets = await buildBuckets(leftIds, rightIds);
     let headline = diversifyHeadline(buckets);
     let strategy = "media-first signals (rate-limited queue)";
+    const rateLimited = Boolean(buckets._rateLimited);
+    delete buckets._rateLimited;
 
-    if (!headline.length) {
-      const anySamples = Object.values(buckets).some(
-        (b) => (b.left_sample?.length || 0) + (b.right_sample?.length || 0) > 0
-      );
-      if (!anySamples) {
-        console.log("[bridge] empty after 429s — cooling 3s then one sequential retry");
-        await sleep(3000);
-        buckets = await buildBuckets(leftIds, rightIds);
-        headline = diversifyHeadline(buckets);
-        strategy = "retry after rate-limit cooldown";
-      }
+    if (!headline.length && rateLimited) {
+      console.log("[bridge] empty after 429s — cooling 5s then artists-only retry");
+      await sleep(5000);
+      // Minimal retry: artists only (cheapest path that still ships a bridge)
+      const a = await insightsForIds(leftIds, "urn:entity:artist", 40);
+      const b = await insightsForIds(rightIds, "urn:entity:artist", 40);
+      buckets = {
+        artists: {
+          label: "Music",
+          type: "urn:entity:artist",
+          bridges: overlap(a, b),
+          left_sample: a.slice(0, 6).map((x) => x.name),
+          right_sample: b.slice(0, 6).map((x) => x.name),
+          left_all: a.slice(0, 15).map((x) => x.name),
+          right_all: b.slice(0, 15).map((x) => x.name),
+        },
+        movies: { label: "Movies", type: "urn:entity:movie", bridges: [], left_sample: [], right_sample: [] },
+        food_brands: { label: "Food & brands", type: "urn:entity:brand", bridges: [], left_sample: [], right_sample: [] },
+        destinations: { label: "Holidays", type: "urn:entity:destination", bridges: [], left_sample: [], right_sample: [] },
+      };
+      headline = diversifyHeadline(buckets);
+      strategy = "artists-only retry after rate-limit cooldown";
     }
 
     const duration_ms = Date.now() - started;
@@ -555,6 +592,7 @@ app.post("/api/bridge", async (req, res) => {
       meta: {
         duration_ms,
         strategy,
+        rate_limited: rateLimited && !headline.length,
         evidence:
           "Bridge computed from media (preferred) / food / destination signals via Qloo Insights. Artists & movies on the cards are profile context — using opposing artists as signals erases overlap. Affinities are Qloo’s; news-only brands filtered from bridges.",
         generated_at: new Date().toISOString(),
